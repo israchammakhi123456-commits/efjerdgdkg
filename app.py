@@ -35,7 +35,9 @@ class KPI(db.Model):
     color = db.Column(db.String(9), default="#3b82f6")
     description = db.Column(db.String(400), default="")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
     entries = db.relationship("Entry", backref="kpi", cascade="all, delete-orphan", order_by="Entry.date")
+    
 
 
 class Entry(db.Model):
@@ -184,21 +186,43 @@ def index():
 
 @app.get("/api/session")
 def get_session():
-    return jsonify({"auth_required": bool(ADMIN_PASSWORD), "logged_in": (not ADMIN_PASSWORD) or bool(session.get("admin"))})
+    uid = session.get("user_id")
+    u = db.session.get(User, uid) if uid else None
+    return jsonify({"auth_required": True, "logged_in": bool(u), "username": u.username if u else None})
+
+
+@app.post("/api/register")
+def register():
+    data = request.get_json(silent=True) or {}
+    username = (data.get("username") or "").strip()
+    pw = data.get("password") or ""
+    if len(username) < 3:
+        return jsonify({"error": "Username must have at least 3 characters."}), 400
+    if len(pw) < 6:
+        return jsonify({"error": "Password must have at least 6 characters."}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({"error": "This username is already taken."}), 409
+    u = User(username=username)
+    u.set_password(pw)
+    db.session.add(u)
+    db.session.commit()
+    session["user_id"] = u.id
+    return jsonify({"ok": True, "username": u.username}), 201
 
 
 @app.post("/api/login")
 def login():
-    pw = (request.get_json(silent=True) or {}).get("password", "")
-    if ADMIN_PASSWORD and secrets.compare_digest(pw, ADMIN_PASSWORD):
-        session["admin"] = True
-        return jsonify({"ok": True})
-    return jsonify({"error": "Wrong password."}), 401
+    data = request.get_json(silent=True) or {}
+    u = User.query.filter_by(username=(data.get("username") or "").strip()).first()
+    if u and u.check_password(data.get("password") or ""):
+        session["user_id"] = u.id
+        return jsonify({"ok": True, "username": u.username})
+    return jsonify({"error": "Wrong username or password."}), 401
 
 
 @app.post("/api/logout")
 def logout():
-    session.pop("admin", None)
+    session.pop("user_id", None)
     return jsonify({"ok": True})
 
 
