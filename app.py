@@ -8,6 +8,7 @@ from functools import wraps
 
 from flask import Flask, Response, jsonify, render_template, request, session
 from flask_sqlalchemy import SQLAlchemy
+from forecast_eval import evaluate_models
 
 app = Flask(__name__)
 
@@ -261,6 +262,16 @@ def delete_entry(eid):
 def history(kid):
     k = db.get_or_404(KPI, kid)
     return jsonify({"kpi": kpi_json(k), "history": [entry_json(e) for e in k.entries], "forecast": forecast(k.entries)})
+
+@app.get("/api/kpis/<int:kid>/forecast-eval")
+def forecast_eval(kid):
+    k = db.get_or_404(KPI, kid)
+    try:
+        result = evaluate_models([e.value for e in k.entries],
+                                 [e.date.isoformat() for e in k.entries])
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    return jsonify(result)
 
 
 @app.get("/api/alerts")
