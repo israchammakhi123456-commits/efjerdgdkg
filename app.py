@@ -52,6 +52,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(60), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
+    role = db.Column(db.String(10), default="user")  # "user" ou "ceo"
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     def set_password(self, pw):
@@ -210,6 +211,15 @@ def seed_sample(user_id):
 
 with app.app_context():
     db.create_all()
+    ceo_pw = os.environ.get("CEO_PASSWORD", "")
+    if ceo_pw:
+        ceo = User.query.filter_by(username="ceo").first()
+        if not ceo:
+            ceo = User(username="ceo")
+            db.session.add(ceo)
+        ceo.role = "ceo"
+        ceo.set_password(ceo_pw)
+        db.session.commit()
 
 
 # ---------- pages & auth ----------
@@ -222,7 +232,8 @@ def index():
 def get_session():
     uid = session.get("user_id")
     u = db.session.get(User, uid) if uid else None
-    return jsonify({"auth_required": True, "logged_in": bool(u), "username": u.username if u else None})
+    return jsonify({"auth_required": True, "logged_in": bool(u), "username": u.username if u else None,
+                    "role": u.role if u else None})
 
 
 @app.post("/api/register")
@@ -230,17 +241,20 @@ def register():
     data = request.get_json(silent=True) or {}
     username = (data.get("username") or "").strip()
     pw = data.get("password") or ""
+    if username.lower() == "ceo":
+        return jsonify({"error": "This username is reserved."}), 400
     if len(username) < 3:
         return jsonify({"error": "Username must have at least 3 characters."}), 400
     if len(pw) < 6:
         return jsonify({"error": "Password must have at least 6 characters."}), 400
     if User.query.filter_by(username=username).first():
         return jsonify({"error": "This username is already taken."}), 409
-    u = User(username=username)
+    u = User(username=username, role="user")
     u.set_password(pw)
     db.session.add(u)
     db.session.commit()
     session["user_id"] = u.id
+    session["role"] = "user"
     return jsonify({"ok": True, "username": u.username}), 201
 
 
@@ -250,13 +264,14 @@ def login():
     u = User.query.filter_by(username=(data.get("username") or "").strip()).first()
     if u and u.check_password(data.get("password") or ""):
         session["user_id"] = u.id
+        session["role"] = u.role
         return jsonify({"ok": True, "username": u.username})
     return jsonify({"error": "Wrong username or password."}), 401
 
 
 @app.post("/api/logout")
 def logout():
-    session.pop("user_id", None)
+    session.clear()
     return jsonify({"ok": True})
 
 # ---------- KPI CRUD ----------
@@ -319,8 +334,8 @@ def create_entry(kid):
 @writer
 def update_entry(eid):
     e = db.get_or_404(Entry, eid)
-    if e.kpi.user_id != session["user_id"]:
-        abort(404)
+    if not can_edit(e.kpi):
+        abort(403)
     parse_entry(request.get_json(silent=True) or {}, e)
     db.session.commit()
     return jsonify(entry_json(e))
@@ -330,8 +345,8 @@ def update_entry(eid):
 @writer
 def delete_entry(eid):
     e = db.get_or_404(Entry, eid)
-    if e.kpi.user_id != session["user_id"]:
-        abort(404)
+    if not can_edit(e.kpi):
+        abort(403)
     db.session.delete(e); db.session.commit()
     return jsonify({"deleted": eid})
 
@@ -339,14 +354,14 @@ def delete_entry(eid):
 @app.get("/api/kpis/<int:kid>/history")
 @reader
 def history(kid):
-    k = own_kpi(kid)
+    k = any_kpi(kid)
     return jsonify({"kpi": kpi_json(k), "history": [entry_json(e) for e in k.entries], "forecast": forecast(k.entries)})
 
 
 @app.get("/api/kpis/<int:kid>/forecast-eval")
 @reader
 def forecast_eval(kid):
-    k = own_kpi(kid)
+    k = any_kpi(kid)
     try:
         result = evaluate_models([e.value for e in k.entries],
                                  [e.date.isoformat() for e in k.entries])
@@ -359,7 +374,7 @@ def forecast_eval(kid):
 @reader
 def alerts():
     out = []
-    for k in KPI.query.filter_by(user_id=session["user_id"]).all():
+    for k in KPI.query.all():
         s = kpi_json(k)
         u = k.unit
         if s["status"] in ("bad", "warn"):
