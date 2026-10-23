@@ -71,6 +71,147 @@ input[type=color]{padding:2px;height:36px}
 .toast.show{opacity:1}
 .lock{font-size:11px;color:var(--warn)}
 </style>
+
+<style>
+/* Visual refresh — index.html only; application logic and API routes unchanged */
+:root{
+  --bg:#0a1020;--bg2:#111a2d;--bg3:#192641;--border:rgba(159,180,218,.16);
+  --text:#edf3ff;--muted:#93a3bf;--accent:#6d8cff;--good:#36d399;
+  --warn:#fbbf24;--bad:#fb7185;--r:16px;
+}
+body{
+  background:
+    radial-gradient(ellipse at 72% -15%,rgba(83,112,255,.17),transparent 38%),
+    var(--bg);
+  color:var(--text);font-size:14px;letter-spacing:.01em;
+}
+.sidebar{
+  width:244px;background:rgba(13,21,39,.94);border-right:1px solid var(--border);
+  padding:12px;gap:6px;backdrop-filter:blur(18px);
+}
+.logo{
+  margin:0 0 14px;padding:17px 14px 20px;border:1px solid var(--border);
+  border-radius:14px;background:linear-gradient(135deg,rgba(109,140,255,.16),rgba(109,140,255,.025));
+  font-size:16px;letter-spacing:-.02em;
+}
+.logo:before{
+  content:"◈";display:inline-grid;place-items:center;width:32px;height:32px;margin-right:9px;
+  border-radius:10px;background:var(--accent);color:white;font-size:18px;vertical-align:middle;
+}
+.logo small{margin:7px 0 0 42px;font-size:11px;letter-spacing:.03em}
+.nav{
+  padding:12px 13px;border:1px solid transparent;border-radius:11px;
+  border-left:1px solid transparent;font-size:13px;gap:11px;transition:background .18s,border-color .18s,color .18s;
+}
+.nav span:first-child{width:20px;text-align:center;font-size:15px}
+.nav:hover{background:rgba(120,145,200,.09);color:var(--text)}
+.nav.active{background:linear-gradient(90deg,rgba(109,140,255,.2),rgba(109,140,255,.07));color:#a9bcff;border-color:rgba(109,140,255,.2);border-left:1px solid var(--accent)}
+.side-foot{margin: auto 0 0;padding:14px 10px;border-top:1px solid var(--border)}
+.main{height:100vh;min-height:100vh}
+.topbar{
+  position:sticky;top:0;z-index:5;padding:19px 30px;
+  background:rgba(10,16,32,.82);backdrop-filter:blur(18px);border-bottom:1px solid var(--border);
+}
+.topbar h1{font-size:21px;font-weight:700;letter-spacing:-.04em}
+.content{padding:26px 30px 36px;max-width:1680px;width:100%;margin:0 auto}
+.btn{
+  background:rgba(125,150,200,.08);border:1px solid var(--border);border-radius:10px;
+  padding:9px 14px;font-size:12px;font-weight:600;transition:transform .15s,border-color .15s,background .15s;
+}
+.btn:hover{border-color:rgba(145,170,230,.45);background:rgba(125,150,200,.14);transform:translateY(-1px)}
+.btn.primary{background:linear-gradient(135deg,#6d8cff,#526be8);border-color:#6d8cff;box-shadow:0 6px 18px rgba(75,103,230,.22)}
+.btn.primary:hover{background:linear-gradient(135deg,#829cff,#6078f0)}
+.btn.danger{color:#ff8a9b}
+.toolbar{gap:10px;margin-bottom:16px}
+.kpi-grid{grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
+.kpi-card{
+  min-height:138px;padding:20px;background:linear-gradient(145deg,rgba(24,37,64,.96),rgba(17,26,45,.96));
+  border:1px solid var(--border);border-radius:16px;box-shadow:0 8px 28px rgba(0,0,0,.10);
+  transition:transform .18s,border-color .18s,box-shadow .18s;
+}
+.kpi-card:hover{transform:translateY(-2px);border-color:rgba(135,160,230,.42);box-shadow:0 12px 32px rgba(0,0,0,.18)}
+.kpi-card.sel{border-color:var(--accent);box-shadow:0 0 0 1px rgba(109,140,255,.2),0 12px 32px rgba(0,0,0,.15)}
+.kpi-lbl{font-size:12px;color:#a9b8d3;margin-bottom:13px;font-weight:600}
+.kpi-val{font-size:32px;letter-spacing:-.045em;margin-bottom:12px}
+.kpi-meta{font-size:11px;gap:8px}
+.pill{padding:4px 8px;border-radius:6px;font-size:10px;letter-spacing:.02em}
+.bar{height:3px;opacity:.9}
+.card{
+  background:linear-gradient(145deg,rgba(18,28,48,.98),rgba(15,24,42,.98));
+  border:1px solid var(--border);border-radius:16px;padding:21px 22px;margin-bottom:16px;
+  box-shadow:0 10px 30px rgba(0,0,0,.10);
+}
+.card h2{font-size:14px;font-weight:700;letter-spacing:-.015em;margin-bottom:6px}
+.card .sub{font-size:12px;line-height:1.6;color:var(--muted);margin-bottom:16px}
+.row2{grid-template-columns:minmax(0,1.8fr) minmax(280px,1fr);gap:16px}
+.chart-wrap{height:290px}
+#forecastEvalCard{margin-top:2px}
+#forecastEvalCard h2{font-size:15px}
+#forecastEvalCard h2[style]{padding-top:4px;border-top:1px solid var(--border)}
+#forecastEvalStatus{padding:12px 14px;background:rgba(125,150,200,.05);border:1px solid var(--border);border-radius:10px;text-align:left;margin:12px 0}
+table{font-size:12px;border-collapse:separate;border-spacing:0}
+th{padding:12px 13px;color:#9eafd0;font-size:10px;letter-spacing:.08em;background:rgba(125,150,200,.055);border-bottom:1px solid var(--border)}
+th:first-child{border-radius:8px 0 0 0}th:last-child{border-radius:0 8px 0 0}
+td{padding:13px;border-bottom:1px solid rgba(159,180,218,.10);color:#dce6fa}
+tbody tr:hover td{background:rgba(125,150,200,.045)}
+tr:last-child td{border-bottom:0}
+table b{color:#f5f8ff}
+select,input,textarea{
+  background:#0b1426;border:1px solid var(--border);border-radius:10px;padding:10px 12px;
+  color:var(--text);font-size:13px;
+}
+select:focus,input:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(109,140,255,.12)}
+.toolbar select{min-width:220px}
+.empty{color:var(--muted);padding:24px 14px;font-size:12px}
+.modal-bg{background:rgba(3,7,16,.76);backdrop-filter:blur(7px)}
+.modal{background:#111b30;border:1px solid rgba(159,180,218,.22);border-radius:18px;padding:25px;box-shadow:0 24px 80px rgba(0,0,0,.4)}
+.modal h3{font-size:18px;letter-spacing:-.03em}
+.f label{font-size:11px;font-weight:600;color:#a8b7d0}
+.err{color:#ff8a9b}
+.alert{padding:16px 18px;border-bottom:1px solid var(--border)}
+.alert:hover{background:rgba(125,150,200,.045)}
+.toast{background:#1a2945;border:1px solid rgba(159,180,218,.24);border-radius:12px;padding:12px 17px;box-shadow:0 12px 32px rgba(0,0,0,.25)}
+.lock{color:#9db4ff}
+a{color:#a9bcff}
+@media(max-width:1100px){
+  .content{padding:22px}
+  .topbar{padding:17px 22px}
+  .row2{grid-template-columns:1fr}
+}
+@media(max-width:900px){
+  .sidebar{width:76px;padding:10px 7px}
+  .logo{padding:12px 6px;text-align:center;font-size:0}
+  .logo:before{margin:0}
+  .logo small,.nav span.t,.side-foot span{display:none}
+  .nav{justify-content:center;padding:12px 6px}
+  .nav span:first-child{width:auto}
+  .content{padding:18px 14px 28px}
+  .topbar{padding:15px 16px}
+  .topbar h1{font-size:18px}
+  .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+  .kpi-card{padding:16px;min-height:125px}
+  .kpi-val{font-size:28px}
+  .card{padding:17px 14px}
+}
+@media(max-width:560px){
+  body{font-size:13px}
+  .sidebar{width:56px}
+  .nav{font-size:12px}
+  .topbar{align-items:flex-start;gap:8px}
+  .topbar h1{font-size:16px}
+  .kpi-grid{grid-template-columns:1fr 1fr}
+  .kpi-card{padding:13px;min-width:0}
+  .kpi-lbl{overflow-wrap:anywhere}
+  .kpi-val{font-size:23px}
+  .kpi-meta{gap:5px}
+  .chart-wrap{height:250px}
+  .toolbar select{width:100%;min-width:0}
+  .toolbar .grow{display:none}
+  th,td{padding:10px 9px;white-space:nowrap}
+  .f2{grid-template-columns:1fr}
+}
+</style>
+
 </head>
 <body>
 <aside class="sidebar">
@@ -91,6 +232,25 @@ input[type=color]{padding:2px;height:36px}
       <div class="row2">
         <div class="card"><h2 id="histTitle">History &amp; forecast</h2><div class="sub">Select a KPI card. Dashed line = 6-month linear forecast with confidence band.</div><div class="chart-wrap"><canvas id="histChart"></canvas></div></div>
         <div class="card"><h2>Progress vs target</h2><div class="sub">Latest value as % of target</div><div class="chart-wrap"><canvas id="pctChart"></canvas></div></div>
+      </div>
+      <div class="card" id="forecastEvalCard">
+        <h2>Forecast model evaluation</h2>
+        <div class="sub">Rolling one-step-ahead comparison for the selected KPI. Lower error values are better.</div>
+        <div id="forecastEvalStatus" class="empty">Loading model evaluation…</div>
+        <div style="overflow-x:auto">
+          <table id="forecastMetricsTable" style="display:none">
+            <thead><tr><th>Model</th><th>MAE ↓</th><th>RMSE</th><th>MAPE</th></tr></thead>
+            <tbody id="forecastMetricsRows"></tbody>
+          </table>
+        </div>
+        <h2 style="margin-top:1.2rem">Test-period predictions</h2>
+        <div class="sub">Actual values compared with predictions for the last test observations.</div>
+        <div style="overflow-x:auto">
+          <table id="forecastPredTable" style="display:none">
+            <thead><tr><th>Date</th><th>Model</th><th>Actual</th><th>Predicted</th><th>Absolute error</th></tr></thead>
+            <tbody id="forecastPredRows"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -236,6 +396,43 @@ async function loadAlerts(){const a=await api('/api/alerts');
   $('#alertList').innerHTML=a.length?a.map(x=>`<div class="alert"><span>${ICON[x.level]}</span><span style="flex:1">${esc(x.msg)}</span><span class="pill s-${x.level==='critical'?'bad':x.level==='warning'?'warn':'none'}">${x.level}</span></div>`).join(''):'<div class="empty">All clear — no alerts.</div>'}
 async function loadAlertBadge(){try{const a=await api('/api/alerts');const n=a.filter(x=>x.level!=='info').length;const b=$('#alertBadge');b.style.display=n?'':'none';b.textContent=n}catch(e){}}
 
+// ---------- forecast model evaluation ----------
+async function loadForecastEval(){
+  const status=$('#forecastEvalStatus');
+  const metricsTable=$('#forecastMetricsTable');
+  const predTable=$('#forecastPredTable');
+  if(!S.sel){
+    status.className='empty';status.textContent='Select or create a KPI to evaluate its forecast models.';
+    metricsTable.style.display='none';predTable.style.display='none';return;
+  }
+  status.className='empty';status.textContent='Loading model evaluation…';
+  metricsTable.style.display='none';predTable.style.display='none';
+  try{
+    const d=await api(`/api/kpis/${S.sel}/forecast-eval`);
+    if(!d.metrics||!d.metrics.length){
+      status.className='empty';status.textContent=d.error||'No evaluation results available.';
+      return;
+    }
+    $('#forecastMetricsRows').innerHTML=d.metrics.map(m=>`<tr>
+      <td><b>${esc(m.model)}</b></td>
+      <td>${m.MAE==null?'—':esc(m.MAE)}</td>
+      <td>${m.RMSE==null?'—':esc(m.RMSE)}</td>
+      <td>${m.MAPE==null?'—':esc(m.MAPE.toFixed?m.MAPE.toFixed(2)+'%':m.MAPE+'%')}</td>
+    </tr>`).join('');
+    $('#forecastPredRows').innerHTML=(d.predictions||[]).map(p=>`<tr>
+      <td>${esc(p.label)}</td><td>${esc(p.model)}</td>
+      <td>${esc(p.actual)}</td><td>${esc(p.predicted)}</td>
+      <td>${esc(Number(p.abs_error).toFixed(4))}</td>
+    </tr>`).join('');
+    status.className='sub';
+    status.textContent=`Evaluation on ${d.n_test} test observations (${d.n_observations} observations in total). ${d.caution||''}`;
+    metricsTable.style.display='';
+    if((d.predictions||[]).length)predTable.style.display='';
+  }catch(e){
+    status.className='empty';status.textContent=e.message||'Unable to load forecast evaluation.';
+  }
+}
+
 // ---------- charts ----------
 Chart.defaults.color='#8b90a0';Chart.defaults.borderColor='rgba(255,255,255,.07)';
 function mk(id,cfg){if(S.charts[id])S.charts[id].destroy();S.charts[id]=new Chart($('#'+id),cfg)}
@@ -257,6 +454,7 @@ async function drawHist(){
     {label:'Target',data:tgt,borderColor:'#f59e0b',borderDash:[2,4],pointRadius:0,borderWidth:1.5}]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},spanGaps:false,
       plugins:{legend:{labels:{filter:i=>!['Upper','Lower'].includes(i.text),boxWidth:12}}},scales:{x:{ticks:{maxTicksLimit:8}}}}});
+  loadForecastEval();
 }
 function drawPct(){
   const ks=S.kpis.filter(k=>k.value!=null);
