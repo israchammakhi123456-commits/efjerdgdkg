@@ -293,7 +293,7 @@ let S={kpis:[],sel:null,auth:{auth_required:false,logged_in:true},entryKpi:null,
 async function api(url,opt={}){
   if(opt.body&&!(opt.body instanceof FormData)){opt.headers={'Content-Type':'application/json'};opt.body=JSON.stringify(opt.body)}
   const r=await fetch(url,opt);const d=await r.json().catch(()=>({}));
-  if(!r.ok){if(r.status===401)openLogin();throw new Error(d.error||'Request failed')}
+  if(!r.ok){if(r.status===401&&!url.startsWith('/api/login'))openLogin();throw new Error(d.error||'Request failed')}
   return d;
 }
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
@@ -320,14 +320,32 @@ function formData(form){return Object.fromEntries(new FormData(form))}
 // ---------- auth ----------
 function renderAuth(){
   const a=S.auth;
-  $('#authBox').innerHTML=!a.auth_required?'<span class="lock">Open editing</span>':
-    a.logged_in?'<a href="#" onclick="logout();return false" style="color:var(--muted)">🔓 Log out</a>':'<a href="#" onclick="openLogin();return false" style="color:var(--warn)">🔒 Log in to edit</a>';
+  $('#authBox').innerHTML=a.logged_in
+    ?`<span style="display:block;margin-bottom:6px">👤 ${esc(a.username)}</span><a href="#" onclick="logout();return false" style="color:var(--muted)">🔓 Log out</a>`
+    :'<a href="#" onclick="openLogin();return false" style="color:var(--warn)">🔒 Log in</a>';
   $$('[data-edit]').forEach(e=>e.style.display=canEdit()?'':'none');
 }
-function openLogin(){modal(`<h3>Log in to edit</h3><form id="lf"><div class="f"><label>Password</label><input type="password" name="password" autofocus></div><div class="err" id="ferr"></div><div class="foot"><button type="button" class="btn" onclick="closeModal()">Cancel</button><button class="btn primary">Log in</button></div></form>`);
-  $('#lf').onsubmit=async e=>{e.preventDefault();try{await api('/api/login',{method:'POST',body:formData(e.target)});S.auth.logged_in=true;closeModal();renderAuth();renderAll();toast('Logged in')}catch(x){$('#ferr').textContent=x.message}}}
-async function logout(){await api('/api/logout',{method:'POST'});S.auth.logged_in=false;renderAuth();renderAll()}
-
+function openLogin(mode='login'){
+  const reg=mode==='register';
+  modal(`<h3>${reg?'Create an account':'Log in'}</h3><form id="lf">
+    <div class="f"><label>Username</label><input name="username" required autofocus autocomplete="username"></div>
+    <div class="f"><label>Password</label><input type="password" name="password" required autocomplete="${reg?'new-password':'current-password'}"></div>
+    <div class="err" id="ferr"></div>
+    <div class="foot">
+      <button type="button" class="btn" onclick="openLogin('${reg?'login':'register'}')">${reg?'I already have an account':'Create an account'}</button>
+      <button class="btn primary">${reg?'Sign up':'Log in'}</button>
+    </div></form>`);
+  $('#lf').onsubmit=async e=>{
+    e.preventDefault();
+    try{
+      const r=await api(reg?'/api/register':'/api/login',{method:'POST',body:formData(e.target)});
+      S.auth={auth_required:true,logged_in:true,username:r.username};
+      closeModal();toast(reg?'Account created':'Logged in');
+      await loadKpis();
+    }catch(x){$('#ferr').textContent=x.message}
+  };
+}
+async function logout(){await api('/api/logout',{method:'POST'});location.reload()}
 // ---------- KPIs ----------
 async function loadKpis(){S.kpis=await api('/api/kpis');if(!S.kpis.find(k=>k.id===S.sel))S.sel=S.kpis[0]?.id??null;if(!S.kpis.find(k=>k.id===S.entryKpi))S.entryKpi=S.kpis[0]?.id??null;renderAll()}
 function renderAll(){renderCards();renderKpiRows();renderEntryKpiSelect();drawPct();drawHist();loadAlertBadge();renderAuth()}
