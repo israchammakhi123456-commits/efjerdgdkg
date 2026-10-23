@@ -8,6 +8,7 @@ from functools import wraps
 
 from flask import Flask, Response, jsonify, render_template, request, session
 from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
 from forecast_eval import evaluate_models
 
 app = Flask(__name__)
@@ -43,6 +44,19 @@ class Entry(db.Model):
     date = db.Column(db.Date, nullable=False)
     value = db.Column(db.Float, nullable=False)
     note = db.Column(db.String(300), default="")
+
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(60), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def set_password(self, pw):
+        self.password_hash = generate_password_hash(pw)
+
+    def check_password(self, pw):
+        return check_password_hash(self.password_hash, pw)
 
 
 # ---------- helpers ----------
