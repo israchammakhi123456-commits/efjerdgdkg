@@ -35,6 +35,7 @@ class KPI(db.Model):
     description = db.Column(db.String(400), default="")
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), index=True)
+    owner = db.relationship("User")
     entries = db.relationship("Entry", backref="kpi", cascade="all, delete-orphan", order_by="Entry.date")
     
 
@@ -73,7 +74,10 @@ def status_for(value, target, direction):
 
 def kpi_json(k, with_stats=True):
     d = {"id": k.id, "name": k.name, "unit": k.unit, "target": k.target, "direction": k.direction,
-         "color": k.color, "description": k.description}
+         "color": k.color, "description": k.description,
+         "owner": k.owner.username if k.owner else "",
+         "mine": k.user_id == session.get("user_id"),
+         "editable": can_edit(k)}
     if with_stats:
         es = k.entries
         last = es[-1] if es else None
@@ -160,11 +164,25 @@ def reader(fn):
     return wrap
 
 
+def is_admin():
+    return session.get("role") == "ceo"
+
+
+def can_edit(k):
+    """Propriétaire du KPI, ou admin (ceo)."""
+    return k.user_id == session.get("user_id") or is_admin()
+
+
+def any_kpi(kid):
+    """Tout utilisateur connecté peut LIRE n'importe quel KPI."""
+    return db.get_or_404(KPI, kid)
+
+
 def own_kpi(kid):
-    """Renvoie le KPI s'il appartient à l'utilisateur connecté, sinon 404."""
+    """Seul le propriétaire (ou le ceo) peut MODIFIER un KPI, sinon erreur 403."""
     k = db.get_or_404(KPI, kid)
-    if k.user_id != session.get("user_id"):
-        abort(404)
+    if not can_edit(k):
+        abort(403)
     return k
 
 
@@ -245,8 +263,7 @@ def logout():
 @app.get("/api/kpis")
 @reader
 def list_kpis():
-    uid = session["user_id"]
-    return jsonify([kpi_json(k) for k in KPI.query.filter_by(user_id=uid).order_by(KPI.id).all()])
+    return jsonify([kpi_json(k) for k in KPI.query.order_by(KPI.id).all()])
 
 
 @app.post("/api/kpis")
@@ -261,7 +278,7 @@ def create_kpi():
 @app.get("/api/kpis/<int:kid>")
 @reader
 def get_kpi(kid):
-    return jsonify(kpi_json(own_kpi(kid)))
+    return jsonify(kpi_json(any_kpi(kid)))
 
 
 @app.put("/api/kpis/<int:kid>")
@@ -284,7 +301,7 @@ def delete_kpi(kid):
 @app.get("/api/kpis/<int:kid>/entries")
 @reader
 def list_entries(kid):
-    k = own_kpi(kid)
+    k = any_kpi(kid)
     return jsonify([entry_json(e) for e in k.entries])
 
 
