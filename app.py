@@ -168,7 +168,7 @@ def own_kpi(kid):
     return k
 
 
-def seed_sample():
+def seed_sample(user_id):
     samples = [
         ("Sales Growth Rate", "%", 8, "higher", "#2a78d6", 4.2, 0.3, "Month-over-month revenue growth"),
         ("Customer Churn Rate", "%", 5, "lower", "#eb6834", 8.3, 0.4, "Share of customers lost per month"),
@@ -180,7 +180,7 @@ def seed_sample():
     rnd = random.Random(42)
     start = date.today().replace(day=1) - timedelta(days=30 * 11)
     for name, unit, target, direction, color, base, noise, desc in samples:
-        k = KPI(name=name, unit=unit, target=target, direction=direction, color=color, description=desc)
+        k = KPI(name=name, unit=unit, target=target, direction=direction, color=color, description=desc, user_id=user_id)
         v = base
         goal = target * (0.99 if direction == "higher" else 1.02)
         for i in range(12):
@@ -320,13 +320,16 @@ def delete_entry(eid):
 
 # ---------- analytics ----------
 @app.get("/api/kpis/<int:kid>/history")
+@reader
 def history(kid):
-    k = db.get_or_404(KPI, kid)
+    k = own_kpi(kid)
     return jsonify({"kpi": kpi_json(k), "history": [entry_json(e) for e in k.entries], "forecast": forecast(k.entries)})
 
+
 @app.get("/api/kpis/<int:kid>/forecast-eval")
+@reader
 def forecast_eval(kid):
-    k = db.get_or_404(KPI, kid)
+    k = own_kpi(kid)
     try:
         result = evaluate_models([e.value for e in k.entries],
                                  [e.date.isoformat() for e in k.entries])
@@ -336,9 +339,10 @@ def forecast_eval(kid):
 
 
 @app.get("/api/alerts")
+@reader
 def alerts():
     out = []
-    for k in KPI.query.all():
+    for k in KPI.query.filter_by(user_id=session["user_id"]).all():
         s = kpi_json(k)
         u = k.unit
         if s["status"] in ("bad", "warn"):
@@ -363,11 +367,13 @@ def alerts():
 
 # ---------- CSV import/export & reset ----------
 @app.get("/api/export")
+@reader
 def export_csv():
     out = io.StringIO()
     w = csv.writer(out)
     w.writerow(["kpi", "date", "value", "note"])
-    for e in Entry.query.join(KPI).order_by(KPI.id, Entry.date).all():
+    q = Entry.query.join(KPI).filter(KPI.user_id == session["user_id"]).order_by(KPI.id, Entry.date)
+    for e in q.all():
         w.writerow([e.kpi.name, e.date.isoformat(), e.value, e.note])
     return Response(out.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=kpi-entries.csv"})
 
@@ -379,7 +385,7 @@ def import_csv():
     if not f:
         raise ValueError("Choose a CSV file with columns: kpi,date,value[,note].")
     rows = list(csv.DictReader(io.StringIO(f.read().decode("utf-8-sig"))))
-    by_name = {k.name.lower(): k for k in KPI.query.all()}
+    by_name = {k.name.lower(): k for k in KPI.query.filter_by(user_id=session["user_id"]).all()}
     added = skipped = 0
     for r in rows:
         r = {(h or "").strip().lower(): v for h, v in r.items()}
@@ -397,10 +403,12 @@ def import_csv():
 @app.post("/api/reset-sample")
 @writer
 def reset_sample():
-    Entry.query.delete(); KPI.query.delete(); db.session.commit()
-    seed_sample()
+    uid = session["user_id"]
+    for k in KPI.query.filter_by(user_id=uid).all():
+        db.session.delete(k)
+    db.session.commit()
+    seed_sample(uid)
     return jsonify({"ok": True})
-
-
+    
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)
