@@ -6,7 +6,7 @@ import csv, io, os, random, secrets
 from datetime import date, datetime, timedelta
 from functools import wraps
 
-from flask import Flask, Response, jsonify, render_template, request, session
+from flask import Flask, Response, abort, jsonify, render_template, request, session
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from forecast_eval import evaluate_models
@@ -20,8 +20,7 @@ app.config["SQLALCHEMY_DATABASE_URI"] = db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {"pool_pre_ping": True}
 app.secret_key = os.environ.get("SECRET_KEY", secrets.token_hex(16))
-# If ADMIN_PASSWORD is set, only logged-in users can create/edit/delete. Reading is always public.
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
 
 db = SQLAlchemy(app)
 
@@ -138,9 +137,10 @@ def parse_entry(data, e):
 
 
 def writer(fn):
+    """Il faut être connecté pour créer/modifier/supprimer."""
     @wraps(fn)
     def wrap(*a, **kw):
-        if ADMIN_PASSWORD and not session.get("admin"):
+        if not session.get("user_id"):
             return jsonify({"error": "Please log in to make changes."}), 401
         try:
             return fn(*a, **kw)
@@ -148,6 +148,24 @@ def writer(fn):
             db.session.rollback()
             return jsonify({"error": str(exc)}), 400
     return wrap
+
+
+def reader(fn):
+    """Il faut être connecté pour consulter ses données."""
+    @wraps(fn)
+    def wrap(*a, **kw):
+        if not session.get("user_id"):
+            return jsonify({"error": "Please log in."}), 401
+        return fn(*a, **kw)
+    return wrap
+
+
+def own_kpi(kid):
+    """Renvoie le KPI s'il appartient à l'utilisateur connecté, sinon 404."""
+    k = db.get_or_404(KPI, kid)
+    if k.user_id != session.get("user_id"):
+        abort(404)
+    return k
 
 
 def seed_sample():
@@ -174,8 +192,6 @@ def seed_sample():
 
 with app.app_context():
     db.create_all()
-    if KPI.query.count() == 0 and os.environ.get("SEED_SAMPLE", "1") == "1":
-        seed_sample()
 
 
 # ---------- pages & auth ----------
