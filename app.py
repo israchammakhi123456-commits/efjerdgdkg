@@ -241,31 +241,33 @@ def logout():
     session.pop("user_id", None)
     return jsonify({"ok": True})
 
-
 # ---------- KPI CRUD ----------
 @app.get("/api/kpis")
+@reader
 def list_kpis():
-    return jsonify([kpi_json(k) for k in KPI.query.order_by(KPI.id).all()])
+    uid = session["user_id"]
+    return jsonify([kpi_json(k) for k in KPI.query.filter_by(user_id=uid).order_by(KPI.id).all()])
 
 
 @app.post("/api/kpis")
 @writer
 def create_kpi():
-    k = KPI()
+    k = KPI(user_id=session["user_id"])
     parse_kpi(request.get_json(silent=True) or {}, k)
     db.session.add(k); db.session.commit()
     return jsonify(kpi_json(k)), 201
 
 
 @app.get("/api/kpis/<int:kid>")
+@reader
 def get_kpi(kid):
-    return jsonify(kpi_json(db.get_or_404(KPI, kid)))
+    return jsonify(kpi_json(own_kpi(kid)))
 
 
 @app.put("/api/kpis/<int:kid>")
 @writer
 def update_kpi(kid):
-    k = db.get_or_404(KPI, kid)
+    k = own_kpi(kid)
     parse_kpi(request.get_json(silent=True) or {}, k)
     db.session.commit()
     return jsonify(kpi_json(k))
@@ -274,21 +276,22 @@ def update_kpi(kid):
 @app.delete("/api/kpis/<int:kid>")
 @writer
 def delete_kpi(kid):
-    db.session.delete(db.get_or_404(KPI, kid)); db.session.commit()
+    db.session.delete(own_kpi(kid)); db.session.commit()
     return jsonify({"deleted": kid})
 
 
 # ---------- Entry CRUD ----------
 @app.get("/api/kpis/<int:kid>/entries")
+@reader
 def list_entries(kid):
-    k = db.get_or_404(KPI, kid)
+    k = own_kpi(kid)
     return jsonify([entry_json(e) for e in k.entries])
 
 
 @app.post("/api/kpis/<int:kid>/entries")
 @writer
 def create_entry(kid):
-    k = db.get_or_404(KPI, kid)
+    k = own_kpi(kid)
     e = Entry(kpi_id=k.id)
     parse_entry(request.get_json(silent=True) or {}, e)
     db.session.add(e); db.session.commit()
@@ -299,6 +302,8 @@ def create_entry(kid):
 @writer
 def update_entry(eid):
     e = db.get_or_404(Entry, eid)
+    if e.kpi.user_id != session["user_id"]:
+        abort(404)
     parse_entry(request.get_json(silent=True) or {}, e)
     db.session.commit()
     return jsonify(entry_json(e))
@@ -307,9 +312,11 @@ def update_entry(eid):
 @app.delete("/api/entries/<int:eid>")
 @writer
 def delete_entry(eid):
-    db.session.delete(db.get_or_404(Entry, eid)); db.session.commit()
+    e = db.get_or_404(Entry, eid)
+    if e.kpi.user_id != session["user_id"]:
+        abort(404)
+    db.session.delete(e); db.session.commit()
     return jsonify({"deleted": eid})
-
 
 # ---------- analytics ----------
 @app.get("/api/kpis/<int:kid>/history")
