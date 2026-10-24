@@ -293,7 +293,7 @@ let S={kpis:[],sel:null,auth:{auth_required:false,logged_in:true},entryKpi:null,
 async function api(url,opt={}){
   if(opt.body&&!(opt.body instanceof FormData)){opt.headers={'Content-Type':'application/json'};opt.body=JSON.stringify(opt.body)}
   const r=await fetch(url,opt);const d=await r.json().catch(()=>({}));
-  if(!r.ok){if(r.status===401&&!url.startsWith('/api/login'))openLogin();throw new Error(d.error||'Request failed')}
+    if(!r.ok){if(r.status===401&&!url.startsWith('/api/login'))openLogin();throw new Error(d.error||'Request failed')}
   return d;
 }
 function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
@@ -321,7 +321,7 @@ function formData(form){return Object.fromEntries(new FormData(form))}
 function renderAuth(){
   const a=S.auth;
   $('#authBox').innerHTML=a.logged_in
-    ?`<span style="display:block;margin-bottom:6px">👤 ${esc(a.username)}</span><a href="#" onclick="logout();return false" style="color:var(--muted)">🔓 Log out</a>`
+    ?`<span style="display:block;margin-bottom:6px">👤 ${esc(a.username)}${a.role==='ceo'?' (admin)':''}</span><a href="#" onclick="logout();return false" style="color:var(--muted)">🔓 Log out</a>`
     :'<a href="#" onclick="openLogin();return false" style="color:var(--warn)">🔒 Log in</a>';
   $$('[data-edit]').forEach(e=>e.style.display=canEdit()?'':'none');
 }
@@ -339,7 +339,7 @@ function openLogin(mode='login'){
     e.preventDefault();
     try{
       const r=await api(reg?'/api/register':'/api/login',{method:'POST',body:formData(e.target)});
-      S.auth={auth_required:true,logged_in:true,username:r.username};
+      S.auth=await api('/api/session');
       closeModal();toast(reg?'Account created':'Logged in');
       await loadKpis();
     }catch(x){$('#ferr').textContent=x.message}
@@ -353,14 +353,16 @@ function renderCards(){
   $('#cards').innerHTML=S.kpis.length?S.kpis.map(k=>{
     const arrow=k.delta==null?'':(k.delta>=0?'▲ ':'▼ ')+Math.abs(+k.delta.toFixed(2));
     return `<div class="kpi-card ${k.id===S.sel?'sel':''}" onclick="S.sel=${k.id};renderCards();drawHist()">
-      <div class="kpi-lbl">${esc(k.name)}</div><div class="kpi-val">${esc(val(k.value,k.unit))}</div>
+      <div class="kpi-lbl">${esc(k.name)} <span style="font-weight:400;opacity:.7">· ${esc(k.owner)}</span></div><div class="kpi-val">${esc(val(k.value,k.unit))}</div>
       <div class="kpi-meta"><span class="pill s-${k.status}">${STATUS[k.status]}</span><span>target ${k.direction==='lower'?'&lt;':'&gt;'} ${esc(val(k.target,k.unit))}</span><span>${arrow}</span></div>
       <div class="bar" style="background:${esc(k.color)}"></div></div>`}).join(''):'<div class="empty" style="grid-column:1/-1">No KPIs yet. Go to “Manage KPIs” to create one.</div>';
 }
 function renderKpiRows(){
-  $('#kpiRows').innerHTML=S.kpis.length?S.kpis.map(k=>`<tr><td><span class="dot" style="background:${esc(k.color)}"></span><b>${esc(k.name)}</b><div style="font-size:11px;color:var(--muted)">${esc(k.description)}</div></td>
+  $('#kpiRows').innerHTML=S.kpis.length?S.kpis.map(k=>`<tr><td><span class="dot" style="background:${esc(k.color)}"></span><b>${esc(k.name)}</b>
+  <div style="font-size:11px;color:var(--muted)">${esc(k.description)}</div>
+  <div style="font-size:11px;color:var(--muted)">Owner: ${esc(k.owner)}${k.mine?' (you)':''}</div></td>
   <td>${esc(val(k.value,k.unit))}</td><td>${k.direction==='lower'?'≤':'≥'} ${esc(val(k.target,k.unit))}</td><td><span class="pill s-${k.status}">${STATUS[k.status]}</span></td><td>${k.entry_count}</td>
-  <td><div class="actions" data-edit><button class="btn sm" onclick="openKpi(${k.id})">Edit</button><button class="btn sm danger" onclick="delKpi(${k.id})">Delete</button></div></td></tr>`).join(''):'<tr><td colspan="6" class="empty">No KPIs yet.</td></tr>';
+  <td>${k.editable?`<div class="actions" data-edit><button class="btn sm" onclick="openKpi(${k.id})">Edit</button><button class="btn sm danger" onclick="delKpi(${k.id})">Delete</button></div>`:''}</td></tr>`).join(''):'<tr><td colspan="6" class="empty">No KPIs yet.</td></tr>';
 }
 function openKpi(id){
   if(!canEdit())return openLogin();

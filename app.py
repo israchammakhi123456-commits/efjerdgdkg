@@ -417,7 +417,10 @@ def import_csv():
     if not f:
         raise ValueError("Choose a CSV file with columns: kpi,date,value[,note].")
     rows = list(csv.DictReader(io.StringIO(f.read().decode("utf-8-sig"))))
-    by_name = {k.name.lower(): k for k in KPI.query.filter_by(user_id=session["user_id"]).all()}
+    q = KPI.query
+    if not is_admin():
+        q = q.filter_by(user_id=session["user_id"])
+    by_name = {k.name.lower(): k for k in q.all()}
     added = skipped = 0
     for r in rows:
         r = {(h or "").strip().lower(): v for h, v in r.items()}
